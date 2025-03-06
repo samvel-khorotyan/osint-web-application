@@ -1,0 +1,52 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: osint-postgres
+    environment:
+      POSTGRES_DB: osint_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - backend-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: osint-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/osint_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      DOCKER_HOST: unix:///var/run/docker.sock
+      DOCKER_FALLBACK_MODE: ${DOCKER_FALLBACK_MODE:-false}
+      PORT: 8080
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - docker_logs:/tmp/docker-logs
+    ports:
+      - "8080:8080"
+    networks:
+      - backend-net
+    restart: unless-stopped
+
+networks:
+  backend-net:
+
+volumes:
+  postgres_data:
+  docker_logs:
